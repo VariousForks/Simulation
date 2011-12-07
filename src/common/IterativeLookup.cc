@@ -106,6 +106,17 @@ appLookup(appLookup)
                                 "config.merge must be enabled if "
                                 "config.useAllParallelResponses is true!");
     }
+
+    if (config.countResponses && (!config.merge || config.verifySiblings
+		|| config.majoritySiblings || config.strictParallelRpcs
+		|| !config.useAllParallelResponses || !config.newRpcOnEveryTimeout
+		|| config.newRpcOnEveryResponse || !config.finishOnFirstUnchanged
+		|| !config.visitOnlyOnce || config.acceptLateSiblings
+		|| routingType != EXHAUSTIVE_ITERATIVE_ROUTING)) {
+	      throw cRuntimeError("IterativeLookup::IterativeLookup(): "
+                                "config.countResponses is true "
+                                "but has not been tested with these settings!");
+    }
 }
 
 IterativeLookup::~IterativeLookup()
@@ -722,6 +733,11 @@ IterativePathLookup::IterativePathLookup(IterativeLookup* lookup)
     this->hops = 0;
     this->step = 0;
     this->pendingRpcs = 0;
+    this->iterationNumber = 0;
+    this->numRequestsSent = 0;
+    this->numResponsesAwaited = 0;
+    this->numResponsesReceived = 0;
+    this->numTimeoutsOccurred = 0;
     this->finished = false;
     this->success = false;
     this->overlay = lookup->overlay;
@@ -782,6 +798,26 @@ void IterativePathLookup::handleResponse(FindNodeResponse* msg)
     }
 
     lookup->setVisited(source);
+
+    if (lookup->config.countResponses){
+		// seek sender's OverlayKey in iterationContacts:
+		set<OverlayKey>::iterator it;
+		it = iterationContacts.find(source.getKey());
+		if (it != iterationContacts.end()) {
+			++numResponsesReceived;
+			EV << "Replied node FOUND in iterationContacts"
+			   << endl;
+		} else {
+			EV << "Replied node NOT FOUND in iterationContacts"
+				   << endl;
+		}
+	    // print info about current iteration:
+	    EV << "\t iterationNumber: " << iterationNumber << endl;
+	    EV << "\t numRequestsSent: " << numRequestsSent << endl;
+	    EV << "\t numResponsesAwaited: " << numResponsesAwaited << endl;
+	    EV << "\t numResponsesReceived: " << numResponsesReceived << endl;
+	    EV << "\t numTimeoutsOccurred: " << numTimeoutsOccurred << endl;
+    }
 
 //  if (source.getKey() == lookup->key) {
 //      cout << "received response from destination for key " << lookup->key
@@ -918,6 +954,20 @@ void IterativePathLookup::handleTimeout(BaseCallMessage* msg,
     std::map<TransportAddress, NodeHandle>::iterator oldPos;
     oldPos = oldNextHops.find(dest);
 
+    if (lookup->config.countResponses){
+		// seek timed out node's OverlayKey in iterationContacts:
+		set<OverlayKey>::iterator it = iterationContacts.find(
+				(dynamic_cast<const NodeHandle&>(dest)).getKey());
+		if (it != iterationContacts.end()) {
+			EV << "Timed out node FOUND in iterationContacts"
+				   << endl;
+			++numTimeoutsOccurred;
+		} else {
+			EV << "Timed out node NOT FOUND in iterationContacts"
+				   << endl;
+		}
+    }
+
     // decrease pending rpcs
     pendingRpcs--;
 
@@ -1052,8 +1102,35 @@ void IterativePathLookup::sendRpc(int num, cPacket* findNodeExt)
         //     << lookup->numSiblings << ")" << endl;
     }
 
+    // Decide whether or not to start another iteration:
+    if (lookup->config.countResponses) {
+    	if (iterationNumber == 0) {
+    		num = lookup->config.parallelRpcs;
+		} else if ((numResponsesReceived == numResponsesAwaited) &&
+    			numResponsesAwaited != 0) {
+    		num = lookup->config.parallelRpcs;
+    	/*} else if ((numRequestsSent == numResponsesAwaited) &&
+    			numTimeoutsOccurred > 0) {
+    		num = lookup->config.parallelRpcs;*/
+    	} else if (numTimeoutsOccurred >
+    			numRequestsSent - numResponsesAwaited) {
+    		num = lookup->config.parallelRpcs;
+    	} else {
+			num = 0;
+    	}
+    	if (num != 0) {
+    		EV << "NEXT ITERATION!" << endl;
+    		++iterationNumber;
+    		numRequestsSent = 0;
+    		numResponsesAwaited = 0;
+    		numResponsesReceived = 0;
+    		numTimeoutsOccurred = 0;
+    		iterationContacts.clear();
+    	}
+    }
+
     // send rpc messages
-    LookupVector::iterator it = nextHops.begin();
+    // LookupVector::iterator it = nextHops.begin();
     int i = 0;
     for (LookupVector::iterator it = nextHops.begin();
          ((num > 0) && (i < lookup->config.redundantNodes)
@@ -1068,6 +1145,10 @@ void IterativePathLookup::sendRpc(int num, cPacket* findNodeExt)
             // send rpc to node increase pending rpcs
             pendingRpcs++;
             num--;
+            if (lookup->config.countResponses) {
+            	++numRequestsSent;
+            	iterationContacts.insert(it->handle.getKey());
+            }
             FindNodeCall* call = lookup->createFindNodeCall(findNodeExt);
             lookup->sendRpc(it->handle, call, this, step);
             oldNextHops[it->handle] = it->source;
@@ -1095,6 +1176,21 @@ void IterativePathLookup::sendRpc(int num, cPacket* findNodeExt)
 //                 it != nextHops.end(); it++)
 //                std::cout << it->first << std::endl;
         }
+    }
+
+    if (lookup->config.countResponses) {
+    	if (numRequestsSent >= lookup->config.newIterationThreshold){
+    		numResponsesAwaited = lookup->config.newIterationThreshold;
+    	} else {
+    		numResponsesAwaited = numRequestsSent;
+    	}
+
+		// print info about iteration:
+		EV << "\t iterationNumber: " << iterationNumber << endl;
+		EV << "\t numRequestsSent: " << numRequestsSent << endl;
+		EV << "\t numResponsesAwaited: " << numResponsesAwaited << endl;
+		EV << "\t numResponsesReceived: " << numResponsesReceived << endl;
+		EV << "\t numTimeoutsOccurred: " << numTimeoutsOccurred << endl;
     }
 
     // no rpc sent, no pending rpcs?
@@ -1134,4 +1230,6 @@ int IterativePathLookup::add(const NodeHandle& handle, const NodeHandle& source)
         return (nextHops.size() - 1);
     }
 }
+
+// }
 

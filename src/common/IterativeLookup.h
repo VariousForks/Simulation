@@ -25,6 +25,7 @@
 #define __ITERATIVE_LOOKUP_H
 
 #include <vector>
+#include <set>
 #include <oversim_mapset.h>
 
 #include <IterativeLookupConfiguration.h>
@@ -33,6 +34,7 @@
 
 #include <NodeVector.h>
 #include <Comparator.h>
+#include <OverlayKey.h>
 
 class NodeHandle;
 class OverlayKey;
@@ -298,10 +300,16 @@ protected://fields: state
     int  hops;
     int  step;
     int  pendingRpcs;
+    int  iterationNumber;
+    int  numRequestsSent; // total number sent for current iteration
+    int  numResponsesAwaited; // total number awaited for current iteration
+    int  numResponsesReceived; // total number received for current iteration 
+    int  numTimeoutsOccurred; // total number occurred for current iteration
     bool finished;
     bool success;
     LookupVector nextHops;
     std::map<TransportAddress, NodeHandle> oldNextHops;
+    std::set<OverlayKey> iterationContacts;
 
 protected://methods: rpc handling
     bool accepts(int rpcId);

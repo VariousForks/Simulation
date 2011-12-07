@@ -158,6 +158,10 @@ void BaseOverlay::initialize(int stage)
         iterativeLookupConfig.acceptLateSiblings =
             par("lookupAcceptLateSiblings");
 
+	    iterativeLookupConfig.countResponses = par("lookupCountResponses");
+	    iterativeLookupConfig.newIterationThreshold =
+	      par("lookupNewIterationThreshold");
+
         recursiveLookupConfig.redundantNodes = par("lookupRedundantNodes");
         recursiveLookupConfig.numRetries = 0; //TODO
 

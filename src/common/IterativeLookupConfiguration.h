@@ -46,6 +46,8 @@ public:
     bool failedNodeRpcs; /**< communicate failed nodes */
     bool visitOnlyOnce; /**< if true, the same node is never asked twice during a single lookup */
     bool acceptLateSiblings; /**< if true, a FindNodeResponse with sibling flag set is always accepted, even if it is from a previous lookup step */
+    bool countResponses; /**< If true, count the number of responses and send begin a new iteration when this takes a certain value */
+    int newIterationThreshold; /**< The number of responses awaited before starting a new iteration. Should be used only if countResponses is true. */
 };
 
 #endif

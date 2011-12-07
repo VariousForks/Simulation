@@ -53,6 +53,8 @@ simple BaseOverlay extends BaseRpc
         bool lookupFinishOnFirstUnchanged; // finish lookup, if the last pending RPC returned without progress    
         bool lookupVisitOnlyOnce; // if true, the same node is never asked twice during a single lookup
         bool lookupAcceptLateSiblings; // if true, a FindNodeResponse with sibling flag set is always accepted, even if it is from a previous lookup step
+        bool lookupCountResponses; // If true, count the number of responses and send begin a new iteration when this takes a certain value.
+        int lookupNewIterationThreshold; // The number of responses awaited before starting a new iteration. Should be used only if countResponses is true.
         string routingType; // default routing mode (iterative, semi-recursive,...)
         bool rejoinOnFailure; // rejoin after loosing connection to the overlay?
         bool sendRpcResponseToLastHop; // needed by KBR protocols for NAT support
