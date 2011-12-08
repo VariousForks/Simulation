@@ -112,6 +112,8 @@ appLookup(appLookup)
 		|| !config.useAllParallelResponses || !config.newRpcOnEveryTimeout
 		|| config.newRpcOnEveryResponse || !config.finishOnFirstUnchanged
 		|| !config.visitOnlyOnce || config.acceptLateSiblings
+		|| (config.newIterationThreshold <= 0)
+		|| (config.newIterationThreshold > config.parallelRpcs)
 		|| routingType != EXHAUSTIVE_ITERATIVE_ROUTING)) {
 	      throw cRuntimeError("IterativeLookup::IterativeLookup(): "
                                 "config.countResponses is true "
@@ -738,6 +740,7 @@ IterativePathLookup::IterativePathLookup(IterativeLookup* lookup)
     this->numResponsesAwaited = 0;
     this->numResponsesReceived = 0;
     this->numTimeoutsOccurred = 0;
+    this->iterationContacts.clear();
     this->finished = false;
     this->success = false;
     this->overlay = lookup->overlay;
@@ -966,6 +969,12 @@ void IterativePathLookup::handleTimeout(BaseCallMessage* msg,
 			EV << "Timed out node NOT FOUND in iterationContacts"
 				   << endl;
 		}
+	    // print info about current iteration:
+	    EV << "\t iterationNumber: " << iterationNumber << endl;
+	    EV << "\t numRequestsSent: " << numRequestsSent << endl;
+	    EV << "\t numResponsesAwaited: " << numResponsesAwaited << endl;
+	    EV << "\t numResponsesReceived: " << numResponsesReceived << endl;
+	    EV << "\t numTimeoutsOccurred: " << numTimeoutsOccurred << endl;
     }
 
     // decrease pending rpcs
