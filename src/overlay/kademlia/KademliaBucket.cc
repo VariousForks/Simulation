@@ -47,3 +47,69 @@ KademliaBucketEntry* KademliaBucket::getOldestNode()
 
 	return &this->at(oldest);
 }
+
+bool KademliaBucket::deleteOldestNode()
+{
+	if (this->isEmpty()) {
+		EV << "\t deleteOldestNodes: bucket empty" << endl;
+		return false;
+	} else {
+		uint32_t oldest = 0;
+		for (uint32_t i = 1; i < this->size();i++) {
+			if (this->at(i).getLastSeen() < this->at(oldest).getLastSeen())
+				oldest = i;
+		}
+		this->erase(this->begin()+oldest);
+		return true;
+	}
+}
+
+bool KademliaBucket::deleteOldestNodes(uint32_t new_size)
+{
+	if (this->isEmpty()) {
+		EV << "\t deleteOldestNodes: bucket empty" << endl;
+		return false;
+	} else if (this->size() <= new_size) {
+		EV << "\t deleteOldestNodes: bucket already small" << endl;
+		return false;
+	} else {
+		uint32_t oldest;
+		int count = 0;
+		while (this->size() > new_size){
+			oldest = 0;
+			for (uint32_t i = 1; i < this->size();i++) {
+				if (this->at(i).getLastSeen() < this->at(oldest).getLastSeen())
+					oldest = i;
+			}
+			this->erase(this->begin()+oldest);
+			++count;
+		}
+		EV << "\t deleteOldestNodes: " << count << " elements removed" << endl;
+		return true;
+	}
+}
+
+bool KademliaBucket::downsizeBucket(uint32_t new_size, uint32_t new_flexibility)
+{
+	if (this == NULL){
+		EV << "\t downsizeBucket: This bucket is NULL!"
+				<< endl;
+		return false;
+	}
+	if (new_size == 0){
+		EV << "\t downsizeBucket: I pity the fool who thinks a bucket should be empty!"
+				<< endl;
+		return false;
+	} else if (this->size() <= new_size + new_flexibility){
+		setMaxSize(new_size + new_flexibility);
+		EV << "\t downsizeBucket: resized, no deletions" << endl;
+		return false;
+	} else {
+		while (this->size() > new_size + new_flexibility){
+			deleteOldestNodes(new_size + new_flexibility);
+		}
+		EV << "\t downsizeBucket: resized with deletions" << endl;
+		setMaxSize(new_size + new_flexibility);
+		return true;
+	}
+}

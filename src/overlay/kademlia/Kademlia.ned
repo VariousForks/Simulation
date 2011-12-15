@@ -39,6 +39,11 @@ simple Kademlia extends BaseOverlay
         int k; // number of paths (size of k-bucket)
         int b; // network diameter O(log_{2^(b)})
         int s; // number of siblings
+        
+        int numPerceivedBuckets; // For AKademlia. Initial number of buckets, in the context of bucket-splitting.
+    	int routingTableCapacity; // For AKademlia. The total number of nodes possible in the routing table.
+    	int bucketFlexibility; // For AKademlia. k_temp + bucketFlexibility is the biggest permissible bucket size.
+    
         bool exhaustiveRefresh; // if true, use exhaustive-iterative lookups to refresh buckets
         bool pingNewSiblings; // ping new unknown siblings?
         bool secureMaintenance; // if true, ping not authenticated nodes before adding them to a bucket

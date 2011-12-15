@@ -41,7 +41,7 @@ enum BucketType {
 	KADEMLIA = 0,
 	NR128 = 1,
 	DKADEMLIA = 2,
-	AKADEMLIA2 = 3
+	AKADEMLIA = 3
 };
 
 
@@ -74,6 +74,17 @@ protected://fields: kademlia parameters
     uint32_t k; /*< number of redundant graphs */
     uint32_t b; /*< number of bits to consider */
     uint32_t s; /*< number of siblings         */
+    uint32_t k_temp; /* For AKademlia. Number of nodes expected per bucket,
+				based on the total number of buckets. */
+    uint32_t numPerceivedBuckets; /* For AKademlia. Number of perceived buckets.
+				Used to emulate bucket splitting on top of existing
+				implementation. */
+    uint32_t splittingBucketStart; /* For AKademlia. Denotes index of first
+				bucket that is within the range of the 'splitting bucket'.*/
+    uint32_t routingTableCapacity; /* For AKademlia. Maximum number of nodes
+				allowed in the whole routing table.*/
+    uint32_t bucketFlexibility; /* For AKademlia. Amount the size of a bucket is
+				allowed to exceed k_temp.*/
 
     uint32_t maxStaleCount; /*< number of timouts until node is removed from
                             routingtable */
@@ -258,6 +269,46 @@ private:
                               BaseRouteMessage* msg);
 
     bool handleFailedNode(const TransportAddress& failed);
+
+    /**
+     * Returns total number of nodes currently in routing table.
+     * Created for use by AKademlia.
+     *
+     * @return Number of nodes currently in routing table.
+     */
+    uint32_t routingTableCurrentSize();
+
+    /*
+     * Returns number of nodes in the splitting bucket, i.e. returns the sum of
+     * the buckets' current sizes for all buckets beyond a certain index.
+     * Created for use by AKademlia.
+     *
+     * @return Number of nodes currently in splitting bucket.
+     */
+    uint32_t splittingBucketCurrentSize();
+
+    /*
+     * Splits the splitting bucket into an ordinary bucket and a
+     * splitting bucket of smaller range. Should only be called when a node is
+     * going to be added to one of the buckets in the splitting bucket's range.
+     * Created for use by AKademlia.
+     */
+    bool splitBuckets();
+
+    /*
+     * Sacrifice a contact from the biggest bucket outwith the range of the
+     * splitting bucket.
+     * Created for use with AKademlia.
+     *
+     * @return True if successful, false otherwise.
+     */
+    bool sacrificeContact();
+
+    /*
+     * To help examine routing table behaviour.
+     * Created for use by AKademlia.
+     */
+    void printRoutingTable(bool detail);
 };
 
 #endif

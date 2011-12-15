@@ -808,18 +808,18 @@ void IterativePathLookup::handleResponse(FindNodeResponse* msg)
 		it = iterationContacts.find(source.getKey());
 		if (it != iterationContacts.end()) {
 			++numResponsesReceived;
-			EV << "Replied node FOUND in iterationContacts"
-			   << endl;
-		} else {
+			/*EV << "Replied node FOUND in iterationContacts"
+			   << endl;*/
+		} /*else {
 			EV << "Replied node NOT FOUND in iterationContacts"
 				   << endl;
-		}
-	    // print info about current iteration:
+		}*/
+	    /* // print info about current iteration:
 	    EV << "\t iterationNumber: " << iterationNumber << endl;
 	    EV << "\t numRequestsSent: " << numRequestsSent << endl;
 	    EV << "\t numResponsesAwaited: " << numResponsesAwaited << endl;
 	    EV << "\t numResponsesReceived: " << numResponsesReceived << endl;
-	    EV << "\t numTimeoutsOccurred: " << numTimeoutsOccurred << endl;
+	    EV << "\t numTimeoutsOccurred: " << numTimeoutsOccurred << endl; */
     }
 
 //  if (source.getKey() == lookup->key) {
@@ -962,19 +962,19 @@ void IterativePathLookup::handleTimeout(BaseCallMessage* msg,
 		set<OverlayKey>::iterator it = iterationContacts.find(
 				(dynamic_cast<const NodeHandle&>(dest)).getKey());
 		if (it != iterationContacts.end()) {
-			EV << "Timed out node FOUND in iterationContacts"
-				   << endl;
+			/* EV << "Timed out node FOUND in iterationContacts"
+				   << endl; */
 			++numTimeoutsOccurred;
-		} else {
+		} /* else {
 			EV << "Timed out node NOT FOUND in iterationContacts"
 				   << endl;
-		}
-	    // print info about current iteration:
+		} */
+	    /* // print info about current iteration:
 	    EV << "\t iterationNumber: " << iterationNumber << endl;
 	    EV << "\t numRequestsSent: " << numRequestsSent << endl;
 	    EV << "\t numResponsesAwaited: " << numResponsesAwaited << endl;
 	    EV << "\t numResponsesReceived: " << numResponsesReceived << endl;
-	    EV << "\t numTimeoutsOccurred: " << numTimeoutsOccurred << endl;
+	    EV << "\t numTimeoutsOccurred: " << numTimeoutsOccurred << endl; */
     }
 
     // decrease pending rpcs
@@ -1128,7 +1128,7 @@ void IterativePathLookup::sendRpc(int num, cPacket* findNodeExt)
 			num = 0;
     	}
     	if (num != 0) {
-    		EV << "NEXT ITERATION!" << endl;
+    		/* EV << "NEXT ITERATION!" << endl; */
     		++iterationNumber;
     		numRequestsSent = 0;
     		numResponsesAwaited = 0;
@@ -1194,12 +1194,12 @@ void IterativePathLookup::sendRpc(int num, cPacket* findNodeExt)
     		numResponsesAwaited = numRequestsSent;
     	}
 
-		// print info about iteration:
+		/* // print info about iteration:
 		EV << "\t iterationNumber: " << iterationNumber << endl;
 		EV << "\t numRequestsSent: " << numRequestsSent << endl;
 		EV << "\t numResponsesAwaited: " << numResponsesAwaited << endl;
 		EV << "\t numResponsesReceived: " << numResponsesReceived << endl;
-		EV << "\t numTimeoutsOccurred: " << numTimeoutsOccurred << endl;
+		EV << "\t numTimeoutsOccurred: " << numTimeoutsOccurred << endl; */
     }
 
     // no rpc sent, no pending rpcs?

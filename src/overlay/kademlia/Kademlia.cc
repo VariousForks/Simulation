@@ -24,6 +24,7 @@
 #include "KademliaMessage_m.h"
 
 #include <assert.h>
+#include <math.h>
 #include <algorithm>
 
 #include <IPAddressResolver.h>
@@ -128,8 +129,8 @@ void Kademlia::initializeOverlay(int stage)
     	bucketType = NR128;
     else if (temp == "dkademlia")
     	bucketType = DKADEMLIA;
-    else if (temp == "akademlia2")
-    	bucketType = AKADEMLIA2;
+    else if (temp == "akademlia")
+    	bucketType = AKADEMLIA;
     else
     	throw cRuntimeError((std::string("Wrong bucket type: ") + temp).c_str());
 
@@ -160,6 +161,28 @@ void Kademlia::initializeOverlay(int stage)
 
     WATCH_VECTOR(*siblingTable);
     WATCH_VECTOR(routingTable);
+
+    if (bucketType == AKADEMLIA) {
+    	numPerceivedBuckets = par("numPerceivedBuckets");
+    	routingTableCapacity = par("routingTableCapacity");
+    	bucketFlexibility = par("bucketFlexibility");
+    	if (numPerceivedBuckets <=0 ||
+    			numPerceivedBuckets > OverlayKey::getLength() ||
+    			routingTableCapacity <= 0 ||
+    			bucketFlexibility < 0) {
+    		throw cRuntimeError("numPerceivedBuckets, routingTableCapacity or"
+    				"bucketFlexibility is"
+    				" outside the suitable range for AKademlia!");
+    	} else {
+    		k_temp = floor(routingTableCapacity/numPerceivedBuckets);
+    		if (k_temp < k) {
+    			throw cRuntimeError("k_temp is initially smaller than k!");
+    		}
+    		splittingBucketStart =
+    				OverlayKey::getLength() - numPerceivedBuckets;
+    		printRoutingTable(true);
+    	}
+    }
 
     // self-message
     bucketRefreshTimer = new cMessage("bucketRefreshTimer");
@@ -334,11 +357,8 @@ int Kademlia::routingBucketIndex(const OverlayKey& key, bool firstOnLayer)
 			std::cout << "index: " << bucketIndex << std::endl;
 		}
 
-		case AKADEMLIA2: {
-			// TODO
-		}
-
 		// Original Kademlia style - exponentially increasing buckets
+		case AKADEMLIA:
 		case NR128:
 		case KADEMLIA:
 		default: {
@@ -367,9 +387,11 @@ int Kademlia::routingBucketSize(int index)
 			return k + (OverlayKey::getLength() / offset);
 		}
 
+		case AKADEMLIA: {
+			return k_temp + bucketFlexibility; // aim for const = 2 or 3.
+		}
 		// Original kademlia style - each bucket holds k nodes
 		case DKADEMLIA:
-		case AKADEMLIA2:
 		case KADEMLIA:
 		default: {
 			return k;
@@ -582,9 +604,50 @@ bool Kademlia::routingAdd(const NodeHandle& handle, bool isAlive,
         }
     }
 
+    if (bucketType == AKADEMLIA){
+		printRoutingTable(true);
+    }
+
     /* add node to the appropriate bucket, if not full ---------------------*/
     bucket = routingBucket(kadHandle.getKey(), true);
-    if (!bucket->isFull()) {
+    if (((!bucket->isFull()) && (bucketType != AKADEMLIA)) ||
+    		((bucketType == AKADEMLIA) && (bucket->size() < k_temp)) ||
+    		((bucketType == AKADEMLIA) &&
+    				(routingTableCurrentSize() < routingTableCapacity) &&
+    				(!bucket->isFull()))) {
+    	/*AKademlia considerations*/
+    	if (bucketType == AKADEMLIA){
+        	uint32_t index = routingBucketIndex(kadHandle.getKey());
+        	//EV << "\t routingAdd: bucket index: " << index << endl;
+        	if ((index <= splittingBucketStart) &&
+        			(splittingBucketCurrentSize() == k_temp)){
+        		while ((splittingBucketStart >= index) &&
+            			(splittingBucketCurrentSize() == k_temp)){
+        			EV << "\t routingAdd: attempting to split buckets..." << endl;
+        			splitBuckets();
+        		}
+        	} else {
+        		EV << "\t routingAdd: no need to split buckets." << endl;
+        	}
+    		if ((routingTableCurrentSize() == routingTableCapacity) &&
+    				(bucket->size() < k_temp)){
+    			// old version: reduce first oversixed bucket significantly.
+    			/*bool node_deleted = false;
+    			int j = routingTable.size() - 1;
+				while (j > splittingBucketStart && node_deleted == false){
+					if (routingTable[j] != NULL){
+						node_deleted = routingTable[j]->deleteOldestNodes(k_temp);
+					}
+					--j;
+				}
+				if (!node_deleted){
+					EV << "\t routingAdd: unable to delete a node from table!" << endl;
+					return false;
+				}*/
+    			sacrificeContact();
+    		}
+    	}
+    	/*End of AKademlia considerations*/
         if (secureMaintenance && !authenticated) {
             if (/*!maintenanceLookup || */(isAlive && (rtt == MAXTIME))) {
                 // received a FindNodeCall or PingCall from a potential new bucket entry
@@ -663,6 +726,8 @@ bool Kademlia::routingAdd(const NodeHandle& handle, bool isAlive,
     }
 
     BUCKET_CONSISTENCY(routingAdd: end);
+    EV << "  routingAdd: State after addition of node:" << endl;
+    printRoutingTable(true);
     return result;
 }
 
@@ -922,6 +987,112 @@ bool Kademlia::handleFailedNode(const TransportAddress& failed)
         }
     }
     return (siblingTable->size() != 0);
+}
+
+uint32_t Kademlia::routingTableCurrentSize()
+{
+	uint32_t count = 0;
+	if (!routingTable.empty()){
+		for (uint32_t i = 0; i < routingTable.size(); ++i) {
+			if (routingTable[i] != NULL) {
+				count += routingTable[i]->size();
+			}
+		}
+	}
+	return count;
+}
+
+uint32_t Kademlia::splittingBucketCurrentSize()
+{
+	uint32_t count = 0;
+	if (!routingTable.empty()){
+		for (uint32_t i = 0; i <= splittingBucketStart; ++i) {
+			if (routingTable[i] != NULL) {
+				count += routingTable[i]->size();
+			}
+		}
+		return count;
+	} else {
+		return 123456;
+	}
+
+}
+
+bool Kademlia::splitBuckets()
+{
+	if (splittingBucketCurrentSize() < k_temp) {
+		EV << "\t splitBuckets: splitting bucket already small" << endl;
+		return false;
+	} else if (routingTable.empty()){
+		EV << "\t splitBuckets: routingTable is empty" << endl;
+		return false;
+	} else {
+		++numPerceivedBuckets;
+		--splittingBucketStart;
+		k_temp = floor(routingTableCapacity/numPerceivedBuckets);
+		if (k_temp < k){
+			EV << "\t splitBuckets: k_temp too small: " << k_temp << endl;
+		}
+		// old version: reduce all buckets
+		/*EV << "\t splitBuckets: downsizing buckets..." << endl;
+		for (uint32_t i = OverlayKey::getLength() - 1;
+				i > splittingBucketStart; --i){
+			if (routingTable[i] != NULL){
+				routingTable[i]->downsizeBucket(k_temp, bucketFlexibility);
+			}
+		}*/
+		// new version: sacrifice only one contact.
+		sacrificeContact();
+		return true;
+	}
+}
+
+bool Kademlia::sacrificeContact()
+{
+	if (routingTable.empty()){
+		return false;
+	} else {
+		uint32_t max_size = 0;
+		uint32_t max_size_index = routingTable.size() - 1;
+		for (uint32_t i = routingTable.size() - 1; i > splittingBucketStart; --i) {
+			if (routingTable[i] != NULL) {
+				if (routingTable[i]->size() > max_size){
+					max_size_index = i;
+					max_size = routingTable[i]->size();
+				}
+			}
+		}
+		if (max_size == 0){
+			return false;
+		}
+		return routingTable[max_size_index]->deleteOldestNode();
+	}
+}
+
+void Kademlia::printRoutingTable(bool detail){
+	EV << "Routing table info:" << endl;
+	if (routingTable.empty()){
+		EV << "\t empty routing table." << endl;
+	} else {
+		EV << "\t routingTableCapacity: " << routingTableCapacity << endl;
+		EV << "\t routingTableCurrentSize: " << routingTableCurrentSize() << endl;
+		EV << "\t numPerceivedBuckets: " << numPerceivedBuckets << endl;
+		EV << "\t k_temp: " << k_temp << endl;
+		EV << "\t splittingBucketStart: " << splittingBucketStart << endl;
+		EV << "\t splittingBucketCurrentSize: " << splittingBucketCurrentSize() << endl;
+		if (detail){
+			EV << "  Detail: bucket sizes:";
+			EV << "\t";
+			for (int i = routingTable.size()-1; i >= 0; --i){
+				if (routingTable[i] == NULL){
+					EV << "N, ";
+				} else {
+					EV << routingTable[i]->size() << ", ";
+				}
+			}
+			EV << endl;
+		}
+	}
 }
 
 // R/Kademlia

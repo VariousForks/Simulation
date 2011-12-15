@@ -42,6 +42,38 @@ public:
 
     KademliaBucketEntry* getOldestNode();
 
+    /*
+     * Deletes the oldest node in a bucket, provided it is nonempty.
+     * For AKademlia.
+     *
+     * @return true if deletion successful, false if empty.
+     */
+    bool deleteOldestNode();
+
+    /*
+     * If bucket has more than new_size entries, an entry is deleted
+     * and true is returned, otherwise false is returned.
+     * For AKademlia.
+     *
+     * @param new_size is the size the bucket should be reduced to.
+     *
+     * @return true if entry deleted, else false
+     */
+    bool deleteOldestNodes(uint32_t new_size);
+
+    /*
+     * If bucket is bigger than new_size, deletes oldest entries until it is of
+     * size equal to new_size. Changes maxSize to new_size, provided this is not
+     * equal to 0.
+     * For AKademlia.
+     *
+     * @param new_size should match AKademlia's current k_temp
+     * @param new_flexibility should match AKademlia's bucketFlexibility
+     *
+     * @return true if removes entry/entries, false otherwise.
+     */
+    bool downsizeBucket(uint32_t new_size, uint32_t new_flexibility);
+
     std::list<KademliaBucketEntry> replacementCache;
 
 private:

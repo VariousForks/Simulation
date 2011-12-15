@@ -570,6 +570,22 @@ public://methods: sorted add support
     {
         this->comparator = comparator;
     }
+
+    /*
+     * getMaxSize - for AKademlia.
+     */
+    uint16_t getMaxSize()
+    {
+    	return maxSize;
+    }
+
+    /*
+     * setMaxSize - for AKademlia.
+     */
+    void setMaxSize(uint32_t new_size)
+    {
+    	maxSize = new_size;
+    }
 };
 template <class T, class T_key, class T_rtt>
 const T BaseKeySortedVector<T, T_key, T_rtt>::UNSPECIFIED_ELEMENT; /**< an unspecified element of the NodeVector */
