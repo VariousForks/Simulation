@@ -51,7 +51,7 @@ KademliaBucketEntry* KademliaBucket::getOldestNode()
 bool KademliaBucket::deleteOldestNode()
 {
 	if (this->isEmpty()) {
-		EV << "\t deleteOldestNodes: bucket empty" << endl;
+		EV << "\t KademliaBucket::deleteOldestNode(): bucket empty" << endl;
 		return false;
 	} else {
 		uint32_t oldest = 0;
@@ -67,10 +67,10 @@ bool KademliaBucket::deleteOldestNode()
 bool KademliaBucket::deleteOldestNodes(uint32_t new_size)
 {
 	if (this->isEmpty()) {
-		EV << "\t deleteOldestNodes: bucket empty" << endl;
+		EV << "\t KademliaBucket::deleteOldestNodes(): bucket empty" << endl;
 		return false;
 	} else if (this->size() <= new_size) {
-		EV << "\t deleteOldestNodes: bucket already small" << endl;
+		EV << "\t KademliaBucket::deleteOldestNodes(): bucket already small" << endl;
 		return false;
 	} else {
 		uint32_t oldest;
@@ -84,7 +84,8 @@ bool KademliaBucket::deleteOldestNodes(uint32_t new_size)
 			this->erase(this->begin()+oldest);
 			++count;
 		}
-		EV << "\t deleteOldestNodes: " << count << " elements removed" << endl;
+		EV << "\t KademliaBucket::deleteOldestNodes(): " << count
+				<< " elements removed" << endl;
 		return true;
 	}
 }
@@ -92,23 +93,25 @@ bool KademliaBucket::deleteOldestNodes(uint32_t new_size)
 bool KademliaBucket::downsizeBucket(uint32_t new_size, uint32_t new_flexibility)
 {
 	if (this == NULL){
-		EV << "\t downsizeBucket: This bucket is NULL!"
+		EV << "\t KademliaBucket::downsizeBucket(): This bucket is NULL!"
 				<< endl;
 		return false;
 	}
 	if (new_size == 0){
-		EV << "\t downsizeBucket: I pity the fool who thinks a bucket should be empty!"
+		EV << "\t KademliaBucket::downsizeBucket(): New size is 0!"
 				<< endl;
 		return false;
 	} else if (this->size() <= new_size + new_flexibility){
 		setMaxSize(new_size + new_flexibility);
-		EV << "\t downsizeBucket: resized, no deletions" << endl;
+		EV << "\t KademliaBucket::downsizeBucket(): resized, no deletions"
+				<< endl;
 		return false;
 	} else {
 		while (this->size() > new_size + new_flexibility){
 			deleteOldestNodes(new_size + new_flexibility);
 		}
-		EV << "\t downsizeBucket: resized with deletions" << endl;
+		EV << "\t KademliaBucket::downsizeBucket(): resized with deletions"
+				<< endl;
 		setMaxSize(new_size + new_flexibility);
 		return true;
 	}

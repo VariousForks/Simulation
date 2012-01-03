@@ -166,7 +166,7 @@ void Kademlia::initializeOverlay(int stage)
     	numPerceivedBuckets = par("numPerceivedBuckets");
     	routingTableCapacity = par("routingTableCapacity");
     	bucketFlexibility = par("bucketFlexibility");
-    	if (numPerceivedBuckets <=0 ||
+    	if (numPerceivedBuckets < 3 ||
     			numPerceivedBuckets > OverlayKey::getLength() ||
     			routingTableCapacity <= 0 ||
     			bucketFlexibility < 0) {
@@ -440,6 +440,12 @@ bool Kademlia::routingAdd(const NodeHandle& handle, bool isAlive,
     kadHandle.setRtt(rtt);
     kadHandle.setLastSeen(simTime());
 
+    if (bucketType == AKADEMLIA){
+    	EV << "\t routingAdd: incoming node belongs in bucket "
+    			<< routingBucketIndex(kadHandle.getKey()) << endl;
+    }
+
+
     /* check if node is already a sibling -----------------------------------*/
     if ((i = siblingTable->findIterator(handle.getKey()))
          != siblingTable->end()) {
@@ -618,32 +624,20 @@ bool Kademlia::routingAdd(const NodeHandle& handle, bool isAlive,
     	/*AKademlia considerations*/
     	if (bucketType == AKADEMLIA){
         	uint32_t index = routingBucketIndex(kadHandle.getKey());
-        	//EV << "\t routingAdd: bucket index: " << index << endl;
+            EV << "\t routingAdd(): adding to bucket " << index << endl;
         	if ((index <= splittingBucketStart) &&
         			(splittingBucketCurrentSize() == k_temp)){
         		while ((splittingBucketStart >= index) &&
             			(splittingBucketCurrentSize() == k_temp)){
         			EV << "\t routingAdd: attempting to split buckets..." << endl;
-        			splitBuckets();
+        			if (splitBuckets()){
+        				EV << "\t ...succeeded." << endl;
+        			} else {
+        				EV << "\t ...failed." << endl;
+        			}
         		}
-        	} else {
-        		EV << "\t routingAdd: no need to split buckets." << endl;
-        	}
-    		if ((routingTableCurrentSize() == routingTableCapacity) &&
+        	} else if ((routingTableCurrentSize() == routingTableCapacity) &&
     				(bucket->size() < k_temp)){
-    			// old version: reduce first oversixed bucket significantly.
-    			/*bool node_deleted = false;
-    			int j = routingTable.size() - 1;
-				while (j > splittingBucketStart && node_deleted == false){
-					if (routingTable[j] != NULL){
-						node_deleted = routingTable[j]->deleteOldestNodes(k_temp);
-					}
-					--j;
-				}
-				if (!node_deleted){
-					EV << "\t routingAdd: unable to delete a node from table!" << endl;
-					return false;
-				}*/
     			sacrificeContact();
     		}
     	}
@@ -725,9 +719,12 @@ bool Kademlia::routingAdd(const NodeHandle& handle, bool isAlive,
         //pingNode(handle);
     }
 
+    if (bucketType == AKADEMLIA){
+        EV << "\t routingAdd(): State after addition of node:" << endl;
+        printRoutingTable(true);
+    }
+
     BUCKET_CONSISTENCY(routingAdd: end);
-    EV << "  routingAdd: State after addition of node:" << endl;
-    printRoutingTable(true);
     return result;
 }
 
@@ -1004,6 +1001,10 @@ uint32_t Kademlia::routingTableCurrentSize()
 
 uint32_t Kademlia::splittingBucketCurrentSize()
 {
+	if (bucketType != AKADEMLIA){
+		throw cException("Kademlia::splittingBucketCurrentSize(): cannot be "
+				"called if bucketType != AKADEMLIA");
+	}
 	uint32_t count = 0;
 	if (!routingTable.empty()){
 		for (uint32_t i = 0; i <= splittingBucketStart; ++i) {
@@ -1020,41 +1021,62 @@ uint32_t Kademlia::splittingBucketCurrentSize()
 
 bool Kademlia::splitBuckets()
 {
+	if (bucketType != AKADEMLIA){
+		throw cException("Kademlia::splitBuckets(): cannot be called if "
+				"bucketType != AKADEMLIA");
+	}
 	if (splittingBucketCurrentSize() < k_temp) {
-		EV << "\t splitBuckets: splitting bucket already small" << endl;
+		EV << "\t Kademlia::splitBuckets(): splitting bucket already small."
+				<< endl;
 		return false;
 	} else if (routingTable.empty()){
-		EV << "\t splitBuckets: routingTable is empty" << endl;
+		EV << "\t Kademlia::splitBuckets(): routingTable is empty." << endl;
 		return false;
+	/*} else if (routingTableCurrentSize() < routingTableCapacity){
+		EV << "\t Kademlia::splitBuckets(): routingTable has space." << endl;
+		return false;*/
 	} else {
 		++numPerceivedBuckets;
 		--splittingBucketStart;
 		k_temp = floor(routingTableCapacity/numPerceivedBuckets);
 		if (k_temp < k){
-			EV << "\t splitBuckets: k_temp too small: " << k_temp << endl;
+			throw cException("k_temp < k. Untested scenario; "
+					"routingTableCapacity is too small in comparison to the "
+					"network size.");
 		}
-		// old version: reduce all buckets
-		/*EV << "\t splitBuckets: downsizing buckets..." << endl;
 		for (uint32_t i = OverlayKey::getLength() - 1;
 				i > splittingBucketStart; --i){
 			if (routingTable[i] != NULL){
 				routingTable[i]->downsizeBucket(k_temp, bucketFlexibility);
 			}
-		}*/
-		// new version: sacrifice only one contact.
-		sacrificeContact();
+		}
+		if (sacrificeContact()){
+			EV << "\t Kademlia::splitBuckets(): contact sacrificed" << endl;
+		} else {
+			EV << "\t Kademlia::splitBuckets(): NO contact sacrificed" << endl;
+		}
 		return true;
 	}
 }
 
 bool Kademlia::sacrificeContact()
 {
+	if (bucketType != AKADEMLIA){
+		throw cException("Kademlia::sacrificeContact(): cannot be called if "
+				"bucketType != AKADEMLIA");
+	}
 	if (routingTable.empty()){
+		return false;
+	} else if (splittingBucketStart == routingTable.size() - 1){
+		return false;
+	} else if (routingTableCurrentSize() < routingTableCapacity){
+		EV << "Kademlia::sacrificeContact(): routing table not full." << endl;
 		return false;
 	} else {
 		uint32_t max_size = 0;
 		uint32_t max_size_index = routingTable.size() - 1;
-		for (uint32_t i = routingTable.size() - 1; i > splittingBucketStart; --i) {
+		for (uint32_t i = splittingBucketStart + 1;
+				i < routingTable.size(); ++i) {
 			if (routingTable[i] != NULL) {
 				if (routingTable[i]->size() > max_size){
 					max_size_index = i;
@@ -1070,18 +1092,24 @@ bool Kademlia::sacrificeContact()
 }
 
 void Kademlia::printRoutingTable(bool detail){
-	EV << "Routing table info:" << endl;
+	if (bucketType != AKADEMLIA){
+		throw cException("Kademlia::printRoutingTable(): cannot be called if "
+				"bucketType != AKADEMLIA");
+	}
+	EV << "   Routing table info:" << endl;
 	if (routingTable.empty()){
 		EV << "\t empty routing table." << endl;
 	} else {
 		EV << "\t routingTableCapacity: " << routingTableCapacity << endl;
-		EV << "\t routingTableCurrentSize: " << routingTableCurrentSize() << endl;
+		EV << "\t routingTableCurrentSize: " << routingTableCurrentSize()
+				<< endl;
 		EV << "\t numPerceivedBuckets: " << numPerceivedBuckets << endl;
 		EV << "\t k_temp: " << k_temp << endl;
 		EV << "\t splittingBucketStart: " << splittingBucketStart << endl;
-		EV << "\t splittingBucketCurrentSize: " << splittingBucketCurrentSize() << endl;
+		EV << "\t splittingBucketCurrentSize: " << splittingBucketCurrentSize()
+				<< endl;
 		if (detail){
-			EV << "  Detail: bucket sizes:";
+			EV << "   Detail: bucket sizes:";
 			EV << "\t";
 			for (int i = routingTable.size()-1; i >= 0; --i){
 				if (routingTable[i] == NULL){
